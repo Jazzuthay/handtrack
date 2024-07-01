@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three/examples/js/loaders/GLTFLoader.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <style>
+    body { margin: 0; }
+    .container { position: relative; width: 100vw; height: 100vh; }
+    .input_video, .output_canvas, .three_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    .input_video { z-index: 1; }
+    .output_canvas { z-index: 2; }
+    .three_canvas { z-index: 3; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <video class="input_video" autoplay></video>
+    <canvas class="output_canvas" width="1280" height="720"></canvas>
+    <canvas id="three_canvas" class="three_canvas" width="1280" height="720"></canvas>
+  </div>
+  <script>
+    // Initialize Three.js
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(33, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three_canvas'), alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.position.z = 2;
+
+    // Ambient light
+    const ambientLight = new THREE.AmbientLight(0xffffff, 5); // Soft white light
+    scene.add(ambientLight);
+
+    // Directional light
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 5);
+    directionalLight.position.set(1, 1, 1).normalize();
+    scene.add(directionalLight);
+
+    let model;
+    const loader = new THREE.GLTFLoader();
+    loader.load('watch1.glb', function(gltf) {
+      model = gltf.scene;
+
+      // Adjust initial rotation (in radians)
+      model.rotation.set(0, 0, Math.PI / 2); // Example: 90 degrees around Y-axis
+
+      // Adjust initial scale
+      model.scale.set(0.3, 0.3, 0.2); // Example: Scale down to 70% of original size
+
+      scene.add(model);
+    });
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (model) {
+        // Apply transformations to the model if needed
+      }
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // MediaPipe setup
+    const videoElement = document.getElementsByClassName('input_video')[0];
+    const canvasElement = document.getElementsByClassName('output_canvas')[0];
+    const canvasCtx = canvasElement.getContext('2d');
+
+    let pivotOffset = new THREE.Vector3(0, 0, 0); // Adjust this vector to match your model's center pivot offset
+
+    // Function to update model position based on hand landmarks
+    function updateModelPosition(firstHandLandmarks) {
+      if (firstHandLandmarks.length > 0) {
+        const firstLandmark = firstHandLandmarks[0];
+        // Log the landmark positions
+        console.log(`Landmark Position - X: ${firstLandmark.x}, Y: ${firstLandmark.y}, Z: ${firstLandmark.z}`);
+
+        // Calculate desired position of the model's pivot point
+        const scaleFactor = 2; // Example scale factor
+        const modelPosition = new THREE.Vector3(
+          firstLandmark.x * scaleFactor - 1,
+          -firstLandmark.y * (scaleFactor/1.5) +0.6,
+          -firstLandmark.z * scaleFactor-0.1 // Apply scale factor to Z
+        );
+        console.log(`Model Position - X: ${modelPosition.x}, Y: ${modelPosition.y}, Z: ${modelPosition.z}`);
+
+        // Adjust model position to align center pivot with the calculated position
+        if (model) {
+          model.position.copy(modelPosition).sub(pivotOffset);
+          console.log(`Updated Model Position - X: ${model.position.x}, Y: ${model.position.y}, Z: ${model.position.z}`);
+        }
+      }
+    }
+
+    // Callback function for MediaPipe onResults
+    function onResults(results) {
+      canvasCtx.save();
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const firstHandLandmarks = results.multiHandLandmarks[0];
+
+        // Update model position based on hand landmarks
+        updateModelPosition(firstHandLandmarks);
+
+        // Draw hand landmarks and connectors
+        drawConnectors(canvasCtx, firstHandLandmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 5});
+        drawLandmarks(canvasCtx, firstHandLandmarks, {color: '#FF0000', lineWidth: 2});
+      }
+
+      canvasCtx.restore();
+    }
+
+    // Initialize MediaPipe Hands object
+    const hands = new Hands({
+      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    });
+
+    // Set options for hand tracking
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.9,
+      minTrackingConfidence: 0.9
+    });
+
+    // Set the onResults callback
+    hands.onResults(onResults);
+
+    // Initialize camera feed from the video element
+    const cameraFeed = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({ image: videoElement });
+      },
+      width: 1280,
+      height: 720
+    });
+
+    // Start camera feed
+    cameraFeed.start();
+  </script>
+</body>
+</html>
