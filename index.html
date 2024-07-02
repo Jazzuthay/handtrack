@@ -10,6 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   <style>
+<<<<<<< HEAD
     body {
       margin: 0;
     }
@@ -72,6 +73,16 @@
       border: none;
       cursor: pointer;
     }
+=======
+    body { margin: 0; }
+    .container { position: relative; width: 100vw; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+    .video-container { position: relative; width: 100%; height: 100%; }
+    .input_video, .output_canvas,.three_canvas  { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); } /* Flip horizontally */
+    .input_video { z-index: 1; }
+    .output_canvas { z-index: 2; }
+    .three_canvas { z-index: 3; pointer-events: none;  }
+    .switch-camera-button { position: fixed; top: 20px; right: 20px; padding: 10px; background-color: #007bff; color: #fff; border: none; cursor: pointer; }
+>>>>>>> 0aefaacfc13f1fd8c61347b2b076211286e13891
   </style>
 </head>
 
@@ -79,6 +90,7 @@
   <div class="container">
     <div class="video-container">
       <video id="inputVideo" class="input_video" autoplay></video>
+<<<<<<< HEAD
       <canvas class="output_canvas" width="720" height="1280"></canvas>
       <!-- Adjust width and height for 9:16 aspect ratio -->
     </div>
@@ -88,6 +100,15 @@
   <button id="switchCameraButton" class="switch-camera-button">Switch Camera</button>
   <script>
     let aspectRatio = 9 / 16;
+=======
+      <canvas class="output_canvas" width="1280" height="720"></canvas>
+    </div>
+    <canvas id="three_canvas" class="three_canvas" width="1280" height="720"></canvas>
+  </div>
+  <button id="switchCameraButton" class="switch-camera-button">Switch Camera</button>
+  <script>
+    let aspectRatio = window.innerWidth / window.innerHeight;
+>>>>>>> 0aefaacfc13f1fd8c61347b2b076211286e13891
 
     // Initialize Three.js
     const scene = new THREE.Scene();
@@ -162,6 +183,7 @@
 
         // Calculate position in the 720x1280 canvas
         const modelPosition = new THREE.Vector3(
+<<<<<<< HEAD
           // Adjust X position
           (normalizedX * scaleFactor - 1),
 
@@ -173,6 +195,13 @@
         );
 
 
+=======
+          firstLandmark.x * scaleFactor - 1,
+          -firstLandmark.y * (scaleFactor / 1.5) + 0.6,
+          -(firstLandmark.z * scaleFactor+0.1) // Apply scale factor to Z
+        );
+
+>>>>>>> 0aefaacfc13f1fd8c61347b2b076211286e13891
         // Calculate target scale based on Z position (adjust this calculation as needed)
         const scaleValue = firstLandmark.z * (10 ** 6); // Example: Scale up based on Z position
         const clampedScaleValue = THREE.MathUtils.clamp(scaleValue, minScale, maxScale);
@@ -305,7 +334,11 @@
       facingMode = facingMode === 'user' ? 'environment' : 'user';
 
       const constraints = {
+<<<<<<< HEAD
         video: { facingMode: facingMode },
+=======
+        video: { facingMode: facingMode }
+>>>>>>> 0aefaacfc13f1fd8c61347b2b076211286e13891
       };
 
       try {
