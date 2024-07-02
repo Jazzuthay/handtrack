@@ -10,23 +10,30 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   <style>
     body { margin: 0; }
-    .container { position: relative; width: 100vw; height: 100vh; }
-    .input_video, .output_canvas, .three_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    .container { position: relative; width: 100vw; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
+    .video-container { position: relative; width: 100%; height: 100%; }
+    .input_video, .output_canvas,.three_canvas  { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); } /* Flip horizontally */
     .input_video { z-index: 1; }
     .output_canvas { z-index: 2; }
-    .three_canvas { z-index: 3; pointer-events: none; }
+    .three_canvas { z-index: 3; pointer-events: none;  }
+    .switch-camera-button { position: fixed; top: 20px; right: 20px; padding: 10px; background-color: #007bff; color: #fff; border: none; cursor: pointer; }
   </style>
 </head>
 <body>
   <div class="container">
-    <video class="input_video" autoplay></video>
-    <canvas class="output_canvas" width="1280" height="720"></canvas>
+    <div class="video-container">
+      <video id="inputVideo" class="input_video" autoplay></video>
+      <canvas class="output_canvas" width="1280" height="720"></canvas>
+    </div>
     <canvas id="three_canvas" class="three_canvas" width="1280" height="720"></canvas>
   </div>
+  <button id="switchCameraButton" class="switch-camera-button">Switch Camera</button>
   <script>
+    let aspectRatio = window.innerWidth / window.innerHeight;
+
     // Initialize Three.js
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(33, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(33, aspectRatio, 0.1, 1000);
     const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('three_canvas'), alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.position.z = 2;
@@ -56,24 +63,33 @@
 
     function animate() {
       requestAnimationFrame(animate);
-      if (model) {
-        // Apply transformations to the model if needed
-      }
       renderer.render(scene, camera);
     }
     animate();
 
     // MediaPipe setup
-    const videoElement = document.getElementsByClassName('input_video')[0];
+    const videoElement = document.getElementById('inputVideo');
     const canvasElement = document.getElementsByClassName('output_canvas')[0];
     const canvasCtx = canvasElement.getContext('2d');
 
-    let pivotOffset = new THREE.Vector3(0, 0, 0); // Adjust this vector to match your model's center pivot offset
+    const minScale = 0.3;
+    const maxScale = 0.7;
 
-    // Function to update model position based on hand landmarks
+    let lastUpdateTime = 0; // Variable to track the last update time
+    const scaleTransitionDuration = 500; // Duration of scale transition in milliseconds (1 second)
+
+    // Function to update model position and scale based on hand landmarks
     function updateModelPosition(firstHandLandmarks) {
       if (firstHandLandmarks.length > 0) {
         const firstLandmark = firstHandLandmarks[0];
+        const wristLandmark = firstHandLandmarks[0];
+        const middleFingerBase = firstHandLandmarks[9];
+
+        // Calculate the angle between the wrist and middle finger base
+        const dx = middleFingerBase.x - wristLandmark.x;
+        const dy = middleFingerBase.y - wristLandmark.y;
+        const angle = -Math.atan2(dy, dx);
+
         // Log the landmark positions
         console.log(`Landmark Position - X: ${firstLandmark.x}, Y: ${firstLandmark.y}, Z: ${firstLandmark.z}`);
 
@@ -81,16 +97,34 @@
         const scaleFactor = 2; // Example scale factor
         const modelPosition = new THREE.Vector3(
           firstLandmark.x * scaleFactor - 1,
-          -firstLandmark.y * (scaleFactor/1.5) +0.6,
-          -firstLandmark.z * scaleFactor-0.1 // Apply scale factor to Z
+          -firstLandmark.y * (scaleFactor / 1.5) + 0.6,
+          -(firstLandmark.z * scaleFactor+0.1) // Apply scale factor to Z
         );
-        console.log(`Model Position - X: ${modelPosition.x}, Y: ${modelPosition.y}, Z: ${modelPosition.z}`);
 
-        // Adjust model position to align center pivot with the calculated position
+        // Calculate target scale based on Z position (adjust this calculation as needed)
+        const scaleValue = firstLandmark.z * (10 ** 6); // Example: Scale up based on Z position
+        const clampedScaleValue = THREE.MathUtils.clamp(scaleValue, minScale, maxScale);
+
+        // Smoothly update scale using lerp over time
+        const currentTime = Date.now();
+        const deltaTime = currentTime - lastUpdateTime;
+        const t = THREE.MathUtils.clamp(deltaTime / scaleTransitionDuration, 0, 1); // Interpolation factor
+
+        // Perform linear interpolation (lerp) for smooth transition
+        const currentScale = model.scale.x; // Assuming uniform scale
+        const targetScale = clampedScaleValue - 0.05; // Adjust as needed
+        const interpolatedScale = THREE.MathUtils.lerp(currentScale, targetScale, t);
+
+        // Apply interpolated scale to the model
         if (model) {
-          model.position.copy(modelPosition).sub(pivotOffset);
-          console.log(`Updated Model Position - X: ${model.position.x}, Y: ${model.position.y}, Z: ${model.position.z}`);
+          model.position.copy(modelPosition);
+          model.scale.set(interpolatedScale, interpolatedScale, 0.1); // Adjust third component as needed
+          model.rotation.z = angle; // Apply rotation to model
+          console.log(`Updated Model Scale - X: ${model.scale.x}, Y: ${model.scale.y}, Z: ${model.scale.z}`);
         }
+
+        // Update last update time
+        lastUpdateTime = currentTime;
       }
     }
 
@@ -103,12 +137,12 @@
       if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const firstHandLandmarks = results.multiHandLandmarks[0];
 
-        // Update model position based on hand landmarks
+        // Update model position and scale based on hand landmarks
         updateModelPosition(firstHandLandmarks);
 
         // Draw hand landmarks and connectors
-        drawConnectors(canvasCtx, firstHandLandmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 5});
-        drawLandmarks(canvasCtx, firstHandLandmarks, {color: '#FF0000', lineWidth: 2});
+        drawConnectors(canvasCtx, firstHandLandmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+        drawLandmarks(canvasCtx, firstHandLandmarks, { color: '#FF0000', lineWidth: 2 });
       }
 
       canvasCtx.restore();
@@ -141,6 +175,33 @@
 
     // Start camera feed
     cameraFeed.start();
+
+    // Switch camera button functionality
+    const switchCameraButton = document.getElementById('switchCameraButton');
+    let facingMode = 'user'; // Initial facing mode (front camera)
+
+    switchCameraButton.addEventListener('click', async () => {
+      facingMode = facingMode === 'user' ? 'environment' : 'user';
+
+      const constraints = {
+        video: { facingMode: facingMode }
+      };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoElement.srcObject = stream;
+      } catch (error) {
+        console.error('Error accessing the camera:', error);
+      }
+    });
+
+    // Add event listener to handle window resize
+    window.addEventListener('resize', () => {
+      const newAspectRatio = window.innerWidth / window.innerHeight;
+      camera.aspect = newAspectRatio;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
   </script>
 </body>
 </html>
