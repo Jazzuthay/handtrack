@@ -2,15 +2,18 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <title>Hand Tracking with Three.js and MediaPipe</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/three/examples/js/loaders/GLTFLoader.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   <style>
-    body { margin: 0; overflow: hidden; }
-    .container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+    body { margin: 0; }
+    .container { position: relative; width: 100vw; height: 100vh; overflow: hidden; display: flex; justify-content: center; align-items: center; }
     .video-container { position: relative; width: 100%; height: 100%; }
-    .input_video, .output_canvas, .three_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    .input_video, .output_canvas, .three_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); } /* Flip horizontally */
     .input_video { z-index: 1; }
     .output_canvas { z-index: 2; }
     .three_canvas { z-index: 3; pointer-events: none; }
@@ -23,7 +26,7 @@
       <video id="inputVideo" class="input_video" autoplay></video>
       <canvas class="output_canvas" width="1280" height="720"></canvas>
     </div>
-    <canvas id="three_canvas" class="three_canvas"></canvas>
+    <canvas id="three_canvas" class="three_canvas" width="1280" height="720"></canvas>
   </div>
   <button id="switchCameraButton" class="switch-camera-button">Switch Camera</button>
   <script>
@@ -49,9 +52,16 @@
     const loader = new THREE.GLTFLoader();
     loader.load('watch1.glb', function(gltf) {
       model = gltf.scene;
-      model.rotation.set(0, 0, Math.PI / 2); // Adjust initial rotation
-      model.scale.set(0.3, 0.3, 0.2); // Adjust initial scale
+
+      // Adjust initial rotation (in radians)
+      model.rotation.set(0, 0, Math.PI / 2); // Example: Adjust initial rotation
+
+      // Adjust initial scale
+      model.scale.set(0.3, 0.3, 0.2); // Example: Adjust initial scale
+
       scene.add(model);
+    }, undefined, function(error) {
+      console.error('Error loading model:', error);
     });
 
     function animate() {
@@ -73,7 +83,7 @@
 
     // Function to update model position and scale based on hand landmarks
     function updateModelPosition(firstHandLandmarks) {
-      if (firstHandLandmarks.length > 0) {
+      if (model) {
         const firstLandmark = firstHandLandmarks[0];
         const wristLandmark = firstHandLandmarks[0];
         const middleFingerBase = firstHandLandmarks[9];
@@ -106,11 +116,9 @@
         const interpolatedScale = THREE.MathUtils.lerp(currentScale, targetScale, t);
 
         // Apply interpolated scale to the model
-        if (model) {
-          model.position.copy(modelPosition);
-          model.scale.set(interpolatedScale, interpolatedScale, 0.1); // Adjust third component as needed
-          model.rotation.z = angle; // Apply rotation to model
-        }
+        model.position.copy(modelPosition);
+        model.scale.set(interpolatedScale, interpolatedScale, 0.1); // Adjust third component as needed
+        model.rotation.z = angle; // Apply rotation to model
 
         // Update last update time
         lastUpdateTime = currentTime;
@@ -128,6 +136,10 @@
 
         // Update model position and scale based on hand landmarks
         updateModelPosition(firstHandLandmarks);
+
+        // Draw hand landmarks and connectors
+        drawConnectors(canvasCtx, firstHandLandmarks, HAND_CONNECTIONS, { color: '#00FF00', lineWidth: 5 });
+        drawLandmarks(canvasCtx, firstHandLandmarks, { color: '#FF0000', lineWidth: 2 });
       }
 
       canvasCtx.restore();
